@@ -3,6 +3,7 @@
 The PowerShell launcher creates an empty, access-restricted ~/.rmapi first.
 Neither the code nor the resulting credential is printed or passed on argv.
 """
+
 import contextlib
 import io
 import logging
