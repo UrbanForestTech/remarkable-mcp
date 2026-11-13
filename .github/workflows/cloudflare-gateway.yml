@@ -1,0 +1,67 @@
+# Urban Forest: checks for deploy/cloudflare (gateway Worker and container image).
+# Builds and tests only; nothing here deploys. Deploys run in Cloudflare Workers
+# Builds from the `release` branch.
+name: Cloudflare gateway
+
+on:
+  pull_request:
+    branches: [main, release]
+    paths:
+      - "deploy/cloudflare/**"
+      - "remarkable_mcp/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/cloudflare-gateway.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deploy/cloudflare
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: deploy/cloudflare/package-lock.json
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the container image
+        run: docker build --platform linux/amd64 -f deploy/cloudflare/Dockerfile -t remarkable-mcp-cf .
+
+      - name: Start it without a reMarkable token
+        run: docker run -d --name rm -p 8000:8000 remarkable-mcp-cf
+
+      - name: Smoke test the Host allowlist
+        run: |
+          init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}'
+          headers=(-H 'content-type: application/json' -H 'accept: application/json, text/event-stream')
+          for i in $(seq 1 60); do
+            curl -s -o /dev/null http://127.0.0.1:8000/ && break
+            sleep 1
+          done
+          ok=$(curl -s -o /dev/null -w '%{http_code}' "${headers[@]}" -H 'host: container' -d "$init" http://127.0.0.1:8000/mcp)
+          other=$(curl -s -o /dev/null -w '%{http_code}' "${headers[@]}" -d "$init" http://127.0.0.1:8000/mcp)
+          origin=$(curl -s -o /dev/null -w '%{http_code}' "${headers[@]}" -H 'host: container' -H 'origin: https://example.com' -d "$init" http://127.0.0.1:8000/mcp)
+          echo "Host container: $ok; Host 127.0.0.1: $other; with Origin: $origin"
+          docker logs rm
+          test "$ok" = 200
+          test "$other" = 421
+          test "$origin" = 403
+
+      - name: Tesseract is installed
+        run: docker exec rm tesseract --version
