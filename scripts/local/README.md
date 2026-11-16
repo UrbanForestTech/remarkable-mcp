@@ -23,6 +23,8 @@ Urban Forest's helpers for running this server on a Windows computer, before or 
 - `Stop-RemarkableCloud.ps1` — stops the process recorded in that state file, after checking it is the expected Python.
 - `verify_cloud_mcp.py --document "/<folder>/<document>"` — a read check: status, browse, and a read plus render of the document you name. Add `--writes` for the library-change check: it creates a uniquely named test folder, pushes a one-page disposable PDF into it, renames, moves, and trashes the PDF and the folders, with a fresh browse after every step and a comparison of the root listing before and after. Reports land in `scripts\local\cloud-verification\<timestamp>\` (ignored by git — they contain names from your library). A failed step is never retried; read the report first.
 
+Every step's time is printed (`TIME: …`) and saved in the report's `timings_ms`. To check the hosted server instead, add `--url https://<gateway>/mcp` and put the gateway token in the `REMARKABLE_GATEWAY_TOKEN` environment variable first (see `deploy/cloudflare/README.md`, "The timing test"). The token is never accepted on the command line, and a remote address must be https. Against the hosted server, `--writes` pushes its disposable PDF with `remarkable_markdown_to_pdf`, because that server cannot read files on this computer.
+
 Run the verifier with the same Python the launchers use, for example `& "$env:USERPROFILE\.venvs\remarkable-mcp\Scripts\python.exe" .\scripts\local\verify_cloud_mcp.py --document "..."` (or `.\.venv\Scripts\python.exe` if you used `uv sync`).
 
 ## USB mode (fallback, read-only)

@@ -1,4 +1,8 @@
-"""Exercise the loopback MCP; --writes authorizes this script's disposable test data.
+"""Exercise the cloud-mode MCP; --writes authorizes this script's disposable test data.
+
+Targets the local server by default. --url points it at the hosted gateway, which
+needs the gateway token in the REMARKABLE_GATEWAY_TOKEN environment variable (never
+on the command line). Every call is timed; the timings land in the report.
 
 Every mutation is followed by a new browse. No failed write is retried. Deletion
 elicitation accepts only the exact current, UUID-checked disposable artifact.
@@ -11,9 +15,12 @@ import datetime as dt
 import io
 import json
 import logging
+import os
 import pathlib
 import re
 import sys
+import time
+import urllib.parse
 
 import httpx2
 import pymupdf
@@ -23,10 +30,43 @@ from PIL import Image
 
 ROOT = pathlib.Path(__file__).resolve().parent
 URL = "http://127.0.0.1:8000/mcp"
+TOKEN_ENV = "REMARKABLE_GATEWAY_TOKEN"
+LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 
 class CheckFailed(Exception):
     pass
+
+
+def describe_failure(exc):
+    """Name a failure, looking inside exception groups for this script's own checks."""
+    pending = [exc]
+    while pending:
+        current = pending.pop(0)
+        if isinstance(current, CheckFailed):
+            return str(current)
+        pending.extend(getattr(current, "exceptions", ()))
+    return type(exc).__name__
+
+
+def is_loopback(url):
+    return (urllib.parse.urlsplit(url).hostname or "") in LOOPBACK_HOSTS
+
+
+def auth_headers(url, environ=os.environ):
+    """Return the headers for this endpoint, refusing an unsafe remote setup.
+
+    The local server needs none. A remote endpoint must be https and needs the
+    gateway token from the environment, sent as a bearer token.
+    """
+    if is_loopback(url):
+        return {}
+    if urllib.parse.urlsplit(url).scheme != "https":
+        raise CheckFailed("A remote endpoint must use https")
+    token = environ.get(TOKEN_ENV, "").strip()
+    if not token:
+        raise CheckFailed(f"Set {TOKEN_ENV} to the gateway token before using a remote --url")
+    return {"Authorization": f"Bearer {token}"}
 
 
 def require(condition, message):
@@ -69,13 +109,15 @@ def absent(browse, name):
 
 
 class Verification:
-    def __init__(self, writes, document):
+    def __init__(self, writes, document, url=URL):
         run_id = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
         self.out = ROOT / "cloud-verification" / run_id
         self.out.mkdir(parents=True)
+        self.url = url
         self.summary = {
             "started_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
-            "endpoint": URL,
+            "endpoint": url,
+            "timings_ms": [],
             "writes_requested": writes,
             "checks_passed": [],
             "completed": False,
@@ -112,10 +154,18 @@ class Verification:
                 return types.ElicitResult(action="accept", content={"confirm": True})
         return types.ElicitResult(action="decline")
 
+    def timed(self, step, started):
+        ms = round((time.perf_counter() - started) * 1000)
+        self.summary["timings_ms"].append({"step": step, "ms": ms})
+        self.save()
+        print(f"TIME: {step} {ms} ms", flush=True)
+
     async def call(self, name, args):
         self.summary["last_request"] = {"tool": name, "arguments": args}
         self.save()
+        started = time.perf_counter()
         result = await self.session.call_tool(name, args, read_timeout_seconds=240)
+        self.timed(f"{self.counter + 1:02d} {name}", started)
         self.counter += 1
         # These results contain notebook/test data, never authentication material.
         (self.out / f"{self.counter:02d}-{name}.json").write_text(
@@ -187,13 +237,18 @@ class Verification:
         self.passed("trash " + kind.rstrip("s") + ": " + name)
 
     async def run(self):
+        headers = auth_headers(self.url)
+        # A remote first call may wait for a sleeping container to start.
+        connect = 5 if is_loopback(self.url) else 30
         async with httpx2.AsyncClient(
-            trust_env=False, timeout=httpx2.Timeout(250, connect=5)
+            trust_env=False, timeout=httpx2.Timeout(250, connect=connect), headers=headers
         ) as http:
-            async with streamable_http_client(URL, http_client=http) as streams:
+            async with streamable_http_client(self.url, http_client=http) as streams:
                 async with ClientSession(*streams, elicitation_callback=self.confirm) as session:
                     self.session = session
+                    started = time.perf_counter()
                     init = await session.initialize()
+                    self.timed("00 initialize (includes any container start)", started)
                     self.summary["protocol"] = init.protocol_version
                     listed = await session.list_tools()
                     names = {t.name for t in listed.tools}
@@ -275,27 +330,28 @@ class Verification:
                     self.summary["created_ids"]["move_destination"] = moved_id
                     self.summary["remaining_artifacts"].append(moved_folder)
                     self.passed("create destination subfolder")
-                    pdf_path = self.out / "harmless-test.pdf"
-                    marker = "reMarkable MCP local cloud write test " + self.test_name
-                    with pymupdf.open() as pdf:
-                        page = pdf.new_page(width=595, height=842)
-                        page.insert_textbox(
-                            pymupdf.Rect(50, 50, 545, 200),
-                            marker + "\nDisposable test document.",
-                            fontsize=12,
-                        )
-                        pdf.save(pdf_path)
+                    marker = "reMarkable MCP cloud write test " + self.test_name
                     name = "MCP upload test"
-                    uploaded = payload(
-                        await self.call(
-                            "remarkable_upload",
-                            {
-                                "file_path": str(pdf_path),
-                                "parent_folder": folder,
-                                "document_name": name,
-                            },
-                        )
-                    )
+                    if is_loopback(self.url):
+                        # The local server can read a file on this computer.
+                        pdf_path = self.out / "harmless-test.pdf"
+                        with pymupdf.open() as pdf:
+                            page = pdf.new_page(width=595, height=842)
+                            page.insert_textbox(
+                                pymupdf.Rect(50, 50, 545, 200),
+                                marker + "\nDisposable test document.",
+                                fontsize=12,
+                            )
+                            pdf.save(pdf_path)
+                        push_tool = "remarkable_upload"
+                        push_args = {"file_path": str(pdf_path)}
+                    else:
+                        # The hosted server cannot see this computer's files, so the
+                        # disposable PDF is rendered from Markdown on the server.
+                        push_tool = "remarkable_markdown_to_pdf"
+                        push_args = {"markdown": f"# {marker}\n\nDisposable test document."}
+                    push_args.update({"parent_folder": folder, "document_name": name})
+                    uploaded = payload(await self.call(push_tool, push_args))
                     require(uploaded.get("uploaded") is True, "Upload did not report success")
                     doc_id = one_named(await self.browse(folder), name, "documents")
                     require(
@@ -391,13 +447,21 @@ def main():
         required=True,
         help="Path of a notebook or PDF on the tablet to read and render (e.g. /Folder/Notebook)",
     )
+    parser.add_argument(
+        "--url",
+        default=URL,
+        help=(
+            f"MCP endpoint (default: {URL}). A remote https endpoint, such as the "
+            f"Cloudflare gateway's /mcp, reads its bearer token from {TOKEN_ENV}."
+        ),
+    )
     args = parser.parse_args()
     logging.disable(logging.CRITICAL)
-    check = Verification(args.writes, args.document)
+    check = Verification(args.writes, args.document, args.url)
     try:
         asyncio.run(check.run())
     except BaseException as exc:
-        check.summary["failure"] = str(exc) if isinstance(exc, CheckFailed) else type(exc).__name__
+        check.summary["failure"] = describe_failure(exc)
         print("STOP:", check.summary["failure"], flush=True)
         print("Writes were not retried. Inspect the saved report before resuming.", flush=True)
     finally:
