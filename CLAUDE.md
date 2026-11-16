@@ -14,7 +14,8 @@ This is Urban Forest's public fork of SamMorrowDrums/remarkable-mcp (MIT). The p
 
 ## State on 2026-11-11
 
-- Branch `lab/repo-setup` (pull request #1 to `main`): `docs/urban-forest/` (specs, research note), `.gitignore` additions, `scripts/local/` (Windows launchers, register and verify helpers, Claude desktop example). All CI jobs pass except that the formatting fix in the last commit must be pushed and rechecked; then David merges.
+- Branch `lab/repo-setup` (pull request #1) is merged into `main`: `docs/urban-forest/`, `.gitignore` additions, `scripts/local/`.
+- 2026-11-13: steps 1–5 below are done on `lab/cloudflare` (pull request to `main`, awaiting David's review). The container starts through `deploy/cloudflare/serve.py`, not the CLI (the CLI refuses `0.0.0.0`); see `deploy/cloudflare/README.md`. Next after the merge: the timing-test changes to `verify_cloud_mcp.py`, then build step 3 (David's Cloudflare clicks).
 - The server runs locally on David's Surface today (cloud transport, library changes on) and is reachable from Claude's desktop app; ChatGPT reaches it through OpenAI's secure MCP tunnel. The hosted version replaces both.
 - Decided: sign-in through Microsoft 365 (Entra app registration, David's click); `workers.dev` address first, a custom domain chosen when the Claude and ChatGPT connectors are added (`urbanforest.ai` is not owned); builds and deploys through Cloudflare Workers Builds from a `release` branch (no Docker on any computer); Workers Paid $5/month approved; the second user (John) has a tablet and Connect.
 - Known bugs to look at later, in the Python server: text extraction returned nothing for a real-text PDF (rendering was fine); SVG stroke render failed on one page; `rmscene` logs newer-format warnings on Paper Pro notebooks.

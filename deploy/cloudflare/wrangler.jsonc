@@ -1,0 +1,32 @@
+// Gateway Worker + per-user remarkable-mcp container.
+// Deployed only by Cloudflare Workers Builds from the `release` branch
+// (root directory: deploy/cloudflare). See README.md before changing anything here.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "remarkable-mcp",
+  "main": "worker/src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+
+  // Secrets (entered by the owner, never committed; see README.md):
+  //   GATEWAY_TOKEN           temporary bearer token, until OAuth (build step 4)
+  //   REMARKABLE_TOKEN_DAVID  contents of that user's ~/.rmapi
+
+  "containers": [
+    {
+      "class_name": "RemarkableContainer",
+      "image": "./Dockerfile",
+      // The image copies the Python package from the repository root.
+      "image_build_context": "../..",
+      // 1/4 vCPU, 1 GiB memory, 4 GB disk. Move to standard-1 if long PDFs run out of memory.
+      "instance_type": "basic",
+      // One instance per user; two users planned.
+      "max_instances": 2
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "REMARKABLE", "class_name": "RemarkableContainer" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RemarkableContainer"] }]
+}

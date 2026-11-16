@@ -3,7 +3,8 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
-$python = Join-Path $repoRoot '.venv\Scripts\python.exe'
+. (Join-Path $PSScriptRoot 'RemarkablePython.ps1')
+$python = Get-RemarkablePython -RepoRoot $repoRoot
 $logDir = Join-Path $PSScriptRoot 'logs'
 $stateFile = Join-Path $PSScriptRoot 'server-state.json'
 $endpoint = 'http://127.0.0.1:8000/mcp'

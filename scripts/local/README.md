@@ -4,7 +4,17 @@ Urban Forest's helpers for running this server on a Windows computer, before or 
 
 ## One-time setup
 
-1. Create the Python environment at the repository root with [uv](https://docs.astral.sh/uv/): `uv sync` (the launchers expect `.venv\Scripts\python.exe` there).
+1. Create the Python environment. On a computer with Smart App Control on, or with the repository inside OneDrive, use python.org's signed Python and keep the environment outside OneDrive — Smart App Control blocks the unsigned `python.exe` that uv writes into `.venv`, and OneDrive sync can delete files inside a `.venv`:
+   ```powershell
+   winget install --id Python.Python.3.12 --exact --scope user
+   & "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe" -m venv "$env:USERPROFILE\.venvs\remarkable-mcp"
+   $py = "$env:USERPROFILE\.venvs\remarkable-mcp\Scripts\python.exe"
+   & $py -m pip install uv
+   & $py -m uv export --frozen --no-dev --no-hashes --no-emit-project -o "$env:TEMP\remarkable-reqs.txt"
+   & $py -m pip install -r "$env:TEMP\remarkable-reqs.txt"
+   & $py -m pip install --no-deps -e .
+   ```
+   Elsewhere, `uv sync` at the repository root is enough. The launchers pick the Python in this order (see `RemarkablePython.ps1`): `$env:REMARKABLE_MCP_PYTHON`, then `%USERPROFILE%\.venvs\remarkable-mcp`, then the repository's `.venv`.
 2. Link the server to your reMarkable account: run `Register-RemarkableCloud.ps1` in a normal PowerShell window. It opens a masked prompt for the eight-character desktop-client code from https://my.remarkable.com/device/desktop/connect, passes the code to `register_remarkable_cloud.py` over standard input (never as an argument), and stores the resulting token at `%USERPROFILE%\.rmapi` with access restricted to you. It never overwrites an existing token. Cloud mode needs a reMarkable Connect subscription.
 
 ## Cloud mode (the normal case)
@@ -13,7 +23,7 @@ Urban Forest's helpers for running this server on a Windows computer, before or 
 - `Stop-RemarkableCloud.ps1` — stops the process recorded in that state file, after checking it is the expected Python.
 - `verify_cloud_mcp.py --document "/<folder>/<document>"` — a read check: status, browse, and a read plus render of the document you name. Add `--writes` for the library-change check: it creates a uniquely named test folder, pushes a one-page disposable PDF into it, renames, moves, and trashes the PDF and the folders, with a fresh browse after every step and a comparison of the root listing before and after. Reports land in `scripts\local\cloud-verification\<timestamp>\` (ignored by git — they contain names from your library). A failed step is never retried; read the report first.
 
-Run the verifier with the repository's Python: `.\.venv\Scripts\python.exe .\scripts\local\verify_cloud_mcp.py --document "..."`.
+Run the verifier with the same Python the launchers use, for example `& "$env:USERPROFILE\.venvs\remarkable-mcp\Scripts\python.exe" .\scripts\local\verify_cloud_mcp.py --document "..."` (or `.\.venv\Scripts\python.exe` if you used `uv sync`).
 
 ## USB mode (fallback, read-only)
 
@@ -22,7 +32,7 @@ Run the verifier with the repository's Python: `.\.venv\Scripts\python.exe .\scr
 
 ## Claude desktop app
 
-`claude-desktop-remarkable.example.json` is an entry for the Claude desktop app's `claude_desktop_config.json` (Settings → Developer → Edit Config): the app starts the server itself over standard input and output, with the same settings as the cloud launcher. Replace `<REPO>` with the repository's full path. Library changes are on in this example; add `--read-only` to `args` for a read-only server.
+`claude-desktop-remarkable.example.json` is an entry for the Claude desktop app's `claude_desktop_config.json` (Settings → Developer → Edit Config): the app starts the server itself over standard input and output, with the same settings as the cloud launcher. Replace `<REPO>` with the repository's full path, and point `command` at the Python you set up in step 1 (with the signed environment, `%USERPROFILE%\.venvs\remarkable-mcp\Scripts\python.exe` written out in full). Library changes are on in this example; add `--read-only` to `args` for a read-only server.
 
 ## What never goes in this repository
 

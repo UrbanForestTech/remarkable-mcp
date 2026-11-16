@@ -6,7 +6,8 @@ $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
 $state = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'cloud-server-state.json') -Raw | ConvertFrom-Json
 $process = Get-Process -Id $state.launcher_pid -ErrorAction SilentlyContinue
 if (-not $process) { Write-Output 'The saved cloud server has already stopped.'; return }
-$expected = (Resolve-Path -LiteralPath (Join-Path $repoRoot '.venv\Scripts\python.exe')).Path
+. (Join-Path $PSScriptRoot 'RemarkablePython.ps1')
+$expected = (Resolve-Path -LiteralPath (Get-RemarkablePython -RepoRoot $repoRoot)).Path
 if ($process.Path -ne $expected) { throw 'The saved PID no longer matches the cloud launcher. Nothing was stopped.' }
 $started = [DateTime]::Parse($state.started_utc).ToUniversalTime()
 if ([Math]::Abs(($process.StartTime.ToUniversalTime() - $started).TotalSeconds) -gt 120) {
