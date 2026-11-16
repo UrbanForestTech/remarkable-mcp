@@ -3,7 +3,8 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
-$python = Join-Path $repoRoot '.venv\Scripts\python.exe'
+. (Join-Path $PSScriptRoot 'RemarkablePython.ps1')
+$python = Get-RemarkablePython -RepoRoot $repoRoot
 $helper = Join-Path $PSScriptRoot 'register_remarkable_cloud.py'
 $tokenFile = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.rmapi'
 if (Test-Path -LiteralPath $tokenFile) { throw 'A cloud credential already exists. It was not replaced.' }

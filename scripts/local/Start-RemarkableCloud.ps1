@@ -3,7 +3,8 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
-$python = Join-Path $repoRoot '.venv\Scripts\python.exe'
+. (Join-Path $PSScriptRoot 'RemarkablePython.ps1')
+$python = Get-RemarkablePython -RepoRoot $repoRoot
 $tokenFile = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.rmapi'
 $endpoint = 'http://127.0.0.1:8000/mcp'
 if (-not (Test-Path -LiteralPath $python)) { throw 'The installed MCP Python environment is missing.' }
