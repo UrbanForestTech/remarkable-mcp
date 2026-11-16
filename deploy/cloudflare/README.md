@@ -142,8 +142,10 @@ the number that decides whether phase 3 of the spec ever happens.
 3. ⚑ Create `release`, connect Workers Builds, enter the two secrets.
 4. ⚑ First merge into `release`: the first deploy, followed by the timing test.
 5. ⚑ Any change of instance type.
-6. ⚑ OAuth (build step 4): the Entra app registration is the owner's click, plus
-   a KV namespace, and a merge into `release`.
+6. ⚑ OAuth (build step 4): the Entra app registration is the owner's click. It
+   includes the read-only file scopes for OneDrive/SharePoint pushes; whether
+   they need admin consent is not known yet. It also needs a KV namespace and a
+   merge into `release`.
 7. ⚑ Custom domain and the Claude and ChatGPT connectors (build step 5).
 
 ## Known limits to settle before relying on it
@@ -152,9 +154,10 @@ the number that decides whether phase 3 of the spec ever happens.
   `remarkable_upload(file_path, …)` reads a file on the server's own disk, which
   in the cloud is the container's, not the user's computer.
   `remarkable_markdown_to_pdf` works because the content travels inside the
-  request. The spec's phase 1 success list includes "push". This needs a
-  decision: accept Markdown-only pushes for now, or add an upload that takes the
-  file's bytes. The second option is a server change that could go upstream.
+  request. **Decided 2026-11-16:** the PDFs live mostly in OneDrive and
+  SharePoint, so build step 4 adds a tool that fetches them through Microsoft
+  Graph with the signed-in user's read-only access. See spec section 2.4.1.
+  Until then, PDFs go to the tablet through the local server.
 - Cold-start length is unknown until the timing test.
 - The image has not been built in Cloudflare's environment yet. GitHub Actions
   builds the same `Dockerfile` on every pull request, which catches most problems
