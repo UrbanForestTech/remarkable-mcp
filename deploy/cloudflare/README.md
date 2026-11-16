@@ -117,16 +117,24 @@ None of this has been done. Do it only after this pull request is merged into `m
 This test measures whether the container's sleep-and-wake is acceptable. It is
 the number that decides whether phase 3 of the spec ever happens.
 
-1. **Before the test**, `scripts/local/verify_cloud_mcp.py` needs two small
-   changes on a `lab/*` branch. It must accept the gateway's URL (`--url`), and it
-   must send `Authorization: Bearer` with the token read from an environment
-   variable, never from the command line. Today it only talks to
-   `http://127.0.0.1:8000/mcp`.
+1. **The client:** `scripts/local/verify_cloud_mcp.py --url <gateway>/mcp`. It
+   reads the gateway token from the `REMARKABLE_GATEWAY_TOKEN` environment
+   variable, never from the command line, and refuses a remote address that is
+   not https. It prints and saves a time for every step. In PowerShell, put the
+   token in the variable without showing it:
+   `$env:REMARKABLE_GATEWAY_TOKEN = Read-Host -MaskInput 'Gateway token'`
+   (PowerShell 7; in Windows PowerShell use
+   `$s = Read-Host -AsSecureString 'Gateway token'; $env:REMARKABLE_GATEWAY_TOKEN = [Net.NetworkCredential]::new('', $s).Password`).
 2. **Cold call:** leave the server idle for more than 10 minutes so the container
-   sleeps. Then time one `remarkable_status` call through the gateway, from
-   sending the request to receiving the answer.
-3. **Warm call:** right after, time the same call again.
-4. **Page render:** time `remarkable_image` on one notebook page and one PDF page.
+   sleeps, then run the verifier with `--document "/<folder>/<notebook>"`. Its
+   `00 initialize` time includes the container start, and `01 remarkable_status`
+   is the first real call.
+3. **Warm call:** run it again right away. The same two lines are the warm times.
+4. **Page render:** the `remarkable_image` line in each run is a page render. Run
+   it once for a notebook and once for a PDF (`--document` names either).
+   `--writes` also exercises the library changes through the gateway; there the
+   disposable PDF comes from `remarkable_markdown_to_pdf`, because the hosted
+   server cannot read a file on this computer.
 5. **Logs:** the Worker logs one line per call (`mcp POST user=… status=… ms=…`) in
    the dashboard under Worker → Logs. Record the cold, warm and render times in a
    dated note in `docs/urban-forest/`, giving counts and timings only, with no
