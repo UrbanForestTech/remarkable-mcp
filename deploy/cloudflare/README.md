@@ -143,9 +143,9 @@ the number that decides whether phase 3 of the spec ever happens.
 4. ⚑ First merge into `release`: the first deploy, followed by the timing test.
 5. ⚑ Any change of instance type.
 6. ⚑ OAuth (build step 4): the Entra app registration is the owner's click. It
-   includes the read-only file scopes for OneDrive/SharePoint pushes; whether
-   they need admin consent is not known yet. It also needs a KV namespace and a
-   merge into `release`.
+   includes the read-only file scopes for OneDrive/SharePoint pushes. If they
+   need admin consent, the owner is a tenant admin and can grant it. It also
+   needs a KV namespace and a merge into `release`.
 7. ⚑ Custom domain and the Claude and ChatGPT connectors (build step 5).
 
 ## Known limits to settle before relying on it
